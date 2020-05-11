@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 import math
-from secrets import randbelow
+import secrets
 from timeit import default_timer as time
 
 import numpy as np
@@ -19,24 +19,27 @@ def str_kernel(arr, s, res):
     cuda.atomic.compare_and_swap(res, 0, pos)
 
 
-arr = list(set(['ab', 'cd', 'ef', 'gh', 'ij', 'kl', 'mn', 'op', 'qr', 'st', 'uv', 'wx', 'yz']))
+arr = [secrets.token_hex() for _ in range(2048)]
 np_arr = np.array(list(map(lambda x: np.byte(bytearray(x, 'utf-8')), arr)))
-
-st = arr[randbelow(len(arr))]
-np_st = np.byte(bytearray(st, 'utf-8'))
-
-np_res = np.zeros(1, dtype=np.int32)
 
 threadsperblock = min(1024, np_arr.shape[0])
 blockspergrid = min(1024, math.ceil(np_arr.shape[0] / threadsperblock))
 assert (threadsperblock * blockspergrid == np_arr.shape[0])
 
-s = time()
 stream = cuda.stream()
+dA = cuda.to_device(np_arr, stream)
+dB = cuda.device_array(len(np_arr[0]), np_arr.dtype, stream=stream)
+
+st = arr[secrets.randbelow(len(arr))]
+np_st = np.byte(bytearray(st, 'utf-8'))
+
+np_res = np.zeros(1, dtype=np.int32)
+dC = cuda.to_device(np_res, stream)
+
+s = time()
+
 with stream.auto_synchronize():
-    dA = cuda.to_device(np_arr, stream)
-    dB = cuda.to_device(np_st, stream)
-    dC = cuda.to_device(np_res, stream)
+    cuda.to_device(np_st, stream, to=dB)
     str_kernel[blockspergrid, threadsperblock](dA, dB, dC)
     dC.to_host(stream)
 

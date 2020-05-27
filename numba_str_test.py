@@ -1,7 +1,9 @@
 #! /usr/bin/env python
+import binascii
 import secrets
 from timeit import default_timer as time
 
+import camellia
 import numpy as np
 from numba import cuda
 
@@ -9,11 +11,14 @@ E = 2000
 DIM = (40, 50)
 M = 2 ** 32
 
+KEY = b'kchdgbdgfncjsgdj'
+IV = b'odjdnfhcbsghdbcy'
 
-def hash(s):  # <=>
+
+def hash(s):
     h = 0
 
-    for i in bytearray(s, 'utf-8'):
+    for i in s:
         h = (i + (h << 6) + (h << 16) - h) % M
 
     return np.uint32(h)
@@ -27,7 +32,9 @@ def str_kernel(arr, s, res):
             cuda.atomic.compare_and_swap(res, 0, pos)
 
 
-arr = [secrets.token_hex() for _ in range(E)]
+c1 = camellia.new(key=KEY, IV=IV, mode=camellia.MODE_CFB)
+
+arr = [c1.encrypt(secrets.token_bytes()) for _ in range(E)]
 np_arr = np.array([hash(x) for x in arr])
 assert (DIM[0] * DIM[1] == np_arr.shape[0])
 assert (np_arr.dtype == np.uint32)
@@ -41,6 +48,8 @@ h_st = hash(st)
 np_res = np.zeros(1, dtype=np.int32)
 dC = cuda.to_device(np_res, stream)
 
+stream.synchronize()
+
 s = time()
 
 with stream.auto_synchronize():
@@ -49,5 +58,8 @@ with stream.auto_synchronize():
 
 e = time()
 
+v1 = binascii.hexlify(camellia.new(key=KEY, IV=IV, mode=camellia.MODE_CFB).decrypt(arr[np_res[0]])).decode('utf-8')
+v2 = binascii.hexlify(camellia.new(key=KEY, IV=IV, mode=camellia.MODE_CFB).decrypt(st)).decode('utf-8')
+
 print('cuda: {0:1.6f}'.format(e - s))
-print('{0} = {1}'.format(arr[np_res[0]], st))
+print("{0} = {1}".format(v1, v2))

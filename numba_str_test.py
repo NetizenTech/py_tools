@@ -19,15 +19,28 @@ IV = b'odjdnfhcbsghdbcy'
 
 def set_dim(n):
     global DIM
-    assert(n < 1000**2)
-    s = int(math.sqrt(n))
-    while s > 0:
-        if n % s == 0:
-            DIM = (s, n // s)
+    LIM = 1000
+    VEC = 10
+    assert(n < LIM**2)
+    if n < VEC**2:
+        DIM = (1, n)
+        return
+
+    h = math.isqrt(n)
+    _x = 1
+    _xx = h
+    for i in reversed(range(h-VEC, h)):
+        _m = n % i
+        if _m == 0:
+            _x = i
             break
-        s -= 1
-        assert(n // s < 1000)
-    assert(reduce(lambda a, b: a*b, DIM) == n)
+        elif _m < _xx:
+            _x = i
+            _xx = _m
+
+    DIM = (_x, math.ceil(n / _x))
+    assert(reduce(lambda a, b: a*b, DIM) >= n)
+    assert(reduce(lambda a, b: a+b, DIM) < LIM*2+VEC)
 
 
 def hash(s):
@@ -53,7 +66,7 @@ c1 = camellia.new(key=KEY, IV=IV, mode=camellia.MODE_CFB)
 
 arr = [c1.encrypt(secrets.token_bytes()) for _ in range(ELEM)]
 np_arr = np.array([hash(x) for x in arr])
-assert (reduce(lambda a, b: a*b, DIM) == np_arr.shape[0])
+assert (reduce(lambda a, b: a*b, DIM) >= np_arr.shape[0])
 assert (np_arr.dtype == np.uint32)
 
 stream = cuda.stream()

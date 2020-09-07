@@ -1,5 +1,4 @@
 #! /usr/bin/env python
-import binascii
 import math
 import string
 from functools import reduce
@@ -13,7 +12,6 @@ import MT19937
 
 ELEM = 2000
 DIM = (1, 1)
-MOD = 2 ** 64 - 1
 
 
 def get_bytes(n=16, ascii=string.ascii_letters):
@@ -46,16 +44,22 @@ def set_dim(n):
     assert(reduce(lambda a, b: a+b, DIM) < LIM*2+VEC)
 
 
-def hash(s):
-    h = 0
+def hash0(s):
+    assert(type(s) == bytes)
+    assert(0 < len(s) < 1000)
+    x = 0
 
     for i in s:
-        h = (i + (h << 6) + (h << 16) - h) % MOD
+        x ^= i
+        x ^= (x >> 29) & 0x5555555555555555
+        x ^= (x << 17) & 0x71D67FFFEDA60000
+        x ^= (x << 37) & 0xFFF7EEE000000000
+        x ^= (x >> 43)
 
-    return np.uint32(h)
+    return np.uint64(x)
 
 
-@cuda.jit('void(u4[:], u4, i4[:])')
+@cuda.jit('void(u8[:], u8, i4[:])')
 def str_kernel(arr, s, res):
     pos = cuda.grid(1)
     if pos < ELEM:
@@ -68,14 +72,14 @@ set_dim(ELEM)
 KEY = get_bytes(16)
 IV = get_bytes(16)
 
-c1 = camellia.new(key=KEY, IV=IV, mode=camellia.MODE_CFB)
+c1 = camellia.new(key=KEY, IV=IV, mode=camellia.MODE_ECB)
 
 MT19937.sgenrand(4357)
 
 arr = [c1.encrypt(get_bytes(32)) for _ in range(ELEM)]
-np_arr = np.array([hash(x) for x in arr])
+np_arr = np.array([hash0(x) for x in arr])
 assert (reduce(lambda a, b: a*b, DIM) >= np_arr.shape[0])
-assert (np_arr.dtype == np.uint32)
+assert (np_arr.dtype == np.uint64)
 
 stream = cuda.stream()
 dA = cuda.to_device(np_arr, stream)
@@ -83,7 +87,7 @@ dA = cuda.to_device(np_arr, stream)
 MT19937.sgenrand(math.floor(time()))
 
 st = arr[MT19937.genrand() % (len(arr))]
-h_st = hash(st)
+h_st = hash0(st)
 
 np_res = np.zeros(1, dtype=np.int32)
 dC = cuda.to_device(np_res, stream)
@@ -98,8 +102,8 @@ with stream.auto_synchronize():
 
 e = time()
 
-v1 = binascii.hexlify(camellia.new(key=KEY, IV=IV, mode=camellia.MODE_CFB).decrypt(arr[np_res[0]])).decode('utf-8')
-v2 = binascii.hexlify(camellia.new(key=KEY, IV=IV, mode=camellia.MODE_CFB).decrypt(st)).decode('utf-8')
+v1 = c1.decrypt(arr[np_res[0]]).decode('utf-8')
+v2 = c1.decrypt(st).decode('utf-8')
 
 assert(v1 == v2)
 print('cuda: {0:1.6f}'.format(e - s))

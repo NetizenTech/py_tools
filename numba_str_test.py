@@ -8,14 +8,14 @@ import camellia
 import numpy as np
 from numba import cuda
 
-import MT19937
+from rdrand import *
 
 ELEM = 2000
 DIM = (1, 1)
 
 
 def get_bytes(n=16, ascii=string.ascii_letters):
-    return bytes("".join([ascii[MT19937.genrand() % len(ascii)] for _ in range(n)]), 'utf-8')
+    return bytes("".join([ascii[rand16() % len(ascii)] for _ in range(n)]), 'utf-8')
 
 
 def set_dim(n):
@@ -74,8 +74,6 @@ IV = get_bytes(16)
 
 c1 = camellia.new(key=KEY, IV=IV, mode=camellia.MODE_ECB)
 
-MT19937.sgenrand(4357)
-
 arr = [c1.encrypt(get_bytes(32)) for _ in range(ELEM)]
 np_arr = np.array([hash0(x) for x in arr])
 assert (reduce(lambda a, b: a*b, DIM) >= np_arr.shape[0])
@@ -84,9 +82,7 @@ assert (np_arr.dtype == np.uint64)
 stream = cuda.stream()
 dA = cuda.to_device(np_arr, stream)
 
-MT19937.sgenrand(math.floor(time()))
-
-st = arr[MT19937.genrand() % (len(arr))]
+st = arr[rand16() % (len(arr))]
 h_st = hash0(st)
 
 np_res = np.zeros(1, dtype=np.int32)

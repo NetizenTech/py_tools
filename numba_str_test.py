@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 import math
+import os
 import string
 from functools import reduce
 from timeit import default_timer as time
@@ -7,15 +8,15 @@ from timeit import default_timer as time
 import camellia
 import numpy as np
 from numba import cuda
-
 from rdrand import *
 
-ELEM = 2000
+ELEM = 20_000
 DIM = (1, 1)
 
 
 def get_bytes(n=16, ascii=string.ascii_letters):
-    return bytes("".join([ascii[rand16() % len(ascii)] for _ in range(n)]), 'utf-8')
+    # return bytes("".join([ascii[rand16() % len(ascii)] for _ in range(n)]), 'utf-8')
+    return os.urandom(n)
 
 
 def set_dim(n):
@@ -64,7 +65,10 @@ def str_kernel(arr, s, res):
     pos = cuda.grid(1)
     if pos < ELEM:
         if arr[pos] == s:
-            cuda.atomic.compare_and_swap(res, 0, pos)
+            # cuda.atomic.compare_and_swap(res, 0, pos)
+            idx = cuda.atomic.add(res, 0, 1) + 1
+            if idx < len(res):
+                res[idx] = pos
 
 
 set_dim(ELEM)
@@ -85,7 +89,7 @@ dA = cuda.to_device(np_arr, stream)
 st = arr[rand16() % (len(arr))]
 h_st = hash0(st)
 
-np_res = np.zeros(1, dtype=np.int32)
+np_res = np.zeros(10, dtype=np.int32)
 dC = cuda.to_device(np_res, stream)
 
 stream.synchronize()
@@ -98,9 +102,10 @@ with stream.auto_synchronize():
 
 e = time()
 
-v1 = c1.decrypt(arr[np_res[0]]).decode('utf-8')
-v2 = c1.decrypt(st).decode('utf-8')
+v1 = c1.decrypt(arr[np_res[1]]).hex()
+v2 = c1.decrypt(st).hex()
 
 assert(v1 == v2)
-print('cuda: {0:1.6f}'.format(e - s))
+print('cuda:\t\t\t\t {0:1.6f}s'.format(e - s))
+print("Total GPU search results:\t {0:,d} of {1:,d}".format(np_res[0], ELEM))
 print("{0} = {1}".format(v1, v2))

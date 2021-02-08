@@ -1,22 +1,13 @@
-#! /usr/bin/env python
-import math
-import os
-import string
-from functools import reduce
-from timeit import default_timer as time
-
+#! /usr/bin/env numba
 import camellia
+import numba
 import numpy as np
 from numba import cuda
-from rdrand import *
+
+assert(cuda.is_available())
 
 ELEM = 20_000
 DIM = (1, 1)
-
-
-def get_bytes(n=16, ascii=string.ascii_letters):
-    # return bytes("".join([ascii[rand16() % len(ascii)] for _ in range(n)]), 'utf-8')
-    return os.urandom(n)
 
 
 def set_dim(n):
@@ -28,7 +19,7 @@ def set_dim(n):
         DIM = (1, n)
         return
 
-    h = math.isqrt(n)
+    h = int(np.sqrt(n))
     _x = 1
     _xx = h
     for i in reversed(range(h-VEC, h)):
@@ -40,14 +31,13 @@ def set_dim(n):
             _x = i
             _xx = _m
 
-    DIM = (_x, math.ceil(n / _x))
-    assert(reduce(lambda a, b: a*b, DIM) >= n)
-    assert(reduce(lambda a, b: a+b, DIM) < LIM*2+VEC)
+    DIM = (_x, int(np.ceil(n / _x)))
+    assert(np.prod(DIM) >= n)
+    assert(np.sum(DIM) < LIM*2+VEC)
 
 
+# hash
 def hash0(s):
-    assert(type(s) == bytes)
-    assert(0 < len(s) < 1000)
     x = 0
 
     for i in s:
@@ -57,55 +47,58 @@ def hash0(s):
         x ^= (x << 37) & 0xFFF7EEE000000000
         x ^= (x >> 43)
 
-    return np.uint64(x)
+    return x
+
+
+c_hash0 = numba.njit('u8(u1[:])')(hash0)
+
+d_hash0 = cuda.jit('u8(u1[:])', device=True)(hash0)
+
+
+# kernels
+@cuda.jit('void(u1[:,:], u8[:])')
+def hash0_kernel(s_arr, h_arr):
+    pos = cuda.grid(1)
+    if pos < h_arr.shape[0]:
+        h_arr[pos] = d_hash0(s_arr[pos])
 
 
 @cuda.jit('void(u8[:], u8, i4[:])')
-def str_kernel(arr, s, res):
+def search_kernel(h_arr, h, r_arr):
     pos = cuda.grid(1)
-    if pos < ELEM:
-        if arr[pos] == s:
+    if pos < h_arr.shape[0]:
+        if h_arr[pos] == h:
             # cuda.atomic.compare_and_swap(res, 0, pos)
-            idx = cuda.atomic.add(res, 0, 1) + 1
-            if idx < len(res):
-                res[idx] = pos
+            idx = cuda.atomic.add(r_arr, 0, 1) + 1
+            if idx < r_arr.shape[0]:
+                r_arr[idx] = pos
 
 
-set_dim(ELEM)
+c_ecb = camellia.new(key=np.random.bytes(24), mode=camellia.MODE_ECB)
 
-KEY = get_bytes(16)
-IV = get_bytes(16)
-
-c1 = camellia.new(key=KEY, IV=IV, mode=camellia.MODE_ECB)
-
-arr = [c1.encrypt(get_bytes(32)) for _ in range(ELEM)]
-np_arr = np.array([hash0(x) for x in arr])
-assert (reduce(lambda a, b: a*b, DIM) >= np_arr.shape[0])
-assert (np_arr.dtype == np.uint64)
+np_str = np.array([bytearray(c_ecb.encrypt(np.random.bytes(32))) for _ in range(ELEM)], dtype=np.uint8)
 
 stream = cuda.stream()
-dA = cuda.to_device(np_arr, stream)
 
-st = arr[rand16() % (len(arr))]
-h_st = hash0(st)
+dEX = cuda.to_device(np_str, stream)
+dHH = cuda.device_array(np_str.shape[0], dtype=np.uint64)
+dRR = cuda.device_array(10, dtype=np.int32)
 
-np_res = np.zeros(10, dtype=np.int32)
-dC = cuda.to_device(np_res, stream)
+r_str = np_str[np.random.randint(np_str.shape[0])]
+h_str = c_hash0(r_str)
 
+set_dim(np_str.shape[0])
 stream.synchronize()
 
-s = time()
+hash0_kernel[DIM](dEX, dHH)
 
-with stream.auto_synchronize():
-    str_kernel[DIM[0], DIM[1]](dA, h_st, dC)
-    dC.to_host(stream)
+search_kernel[DIM](dHH, h_str, dRR)
 
-e = time()
+np_res = dRR.copy_to_host()
 
-v1 = c1.decrypt(arr[np_res[1]]).hex()
-v2 = c1.decrypt(st).hex()
+v1 = c_ecb.decrypt(bytes(np_str[np_res[1]])).hex()
+v2 = c_ecb.decrypt(bytes(r_str)).hex()
 
 assert(v1 == v2)
-print('cuda:\t\t\t\t {0:1.6f}s'.format(e - s))
-print("Total GPU search results:\t {0:,d} of {1:,d}".format(np_res[0], ELEM))
+print("Total GPU search results:\t {0:,d} of {1:,d}".format(np_res[0], np_str.shape[0]))
 print("{0} = {1}".format(v1, v2))

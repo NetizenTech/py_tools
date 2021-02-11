@@ -1,12 +1,13 @@
+#include <stdint.h>
 
-unsigned long _rand64(void);
+uint64_t _rand64(void);
 
-unsigned _rand32(void);
+uint32_t _rand32(void);
 
-unsigned short _rand16(void);
+uint16_t _rand16(void);
 
-unsigned long _seed64(void);
+uint64_t _seed64(void);
 
-unsigned _seed32(void);
+uint32_t _seed32(void);
 
-unsigned short _seed16(void);
+uint16_t _seed16(void);

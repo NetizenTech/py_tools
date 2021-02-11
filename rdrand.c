@@ -15,44 +15,44 @@
                  : "n"(LOOP)                                                                                           \
                  : "rcx", "cc")
 
-unsigned long _rand64()
+uint64_t _rand64()
 {
-    register unsigned long v asm("rax");
+    register uint64_t v asm("rax");
     RD(RAND);
     return v;
 }
 
-unsigned _rand32()
+uint32_t _rand32()
 {
-    register unsigned v asm("eax");
+    register uint32_t v asm("eax");
     RD(RAND);
     return v;
 }
 
-unsigned short _rand16()
+uint16_t _rand16()
 {
-    register unsigned short v asm("ax");
+    register uint16_t v asm("ax");
     RD(RAND);
     return v;
 }
 
-unsigned long _seed64()
+uint64_t _seed64()
 {
-    register unsigned long v asm("rax");
+    register uint64_t v asm("rax");
     RD(SEED);
     return v;
 }
 
-unsigned _seed32()
+uint32_t _seed32()
 {
-    register unsigned v asm("eax");
+    register uint32_t v asm("eax");
     RD(SEED);
     return v;
 }
 
-unsigned short _seed16()
+uint16_t _seed16()
 {
-    register unsigned short v asm("ax");
+    register uint16_t v asm("ax");
     RD(SEED);
     return v;
 }

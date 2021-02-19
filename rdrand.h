@@ -1,13 +1,31 @@
+#include <assert.h>
 #include <stdint.h>
 
-uint64_t _rand64(void);
+#define RC 10
 
-uint32_t _rand32(void);
+#define RAND "rdrand %0\n\t"
+#define SEED "rdseed %0\n\t"
 
-uint16_t _rand16(void);
+#define RD(i)                                                                                                          \
+    asm volatile("mov %1, %%ecx\n\t"                                                                                   \
+                 "1:\n\t" i "jc 2f\n\t"                                                                                \
+                 "loop 1b\n\t"                                                                                         \
+                 "xor %0, %0\n\t"                                                                                      \
+                 "2:"                                                                                                  \
+                 : "=r"(v)                                                                                             \
+                 : "n"(RC)                                                                                             \
+                 : "rcx", "cc")
 
-uint64_t _seed64(void);
+uint64_t rand64(void) __attribute__((nothrow));
 
-uint32_t _seed32(void);
+uint32_t rand32(void) __attribute__((nothrow));
 
-uint16_t _seed16(void);
+uint16_t rand16(void) __attribute__((nothrow));
+
+uint64_t seed64(void) __attribute__((nothrow));
+
+uint32_t seed32(void) __attribute__((nothrow));
+
+uint16_t seed16(void) __attribute__((nothrow));
+
+void rand_bytes(uint8_t *r, const uint16_t N) __attribute__((nonnul));

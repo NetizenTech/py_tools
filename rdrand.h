@@ -16,16 +16,18 @@
                  : "n"(RC)                                                                                             \
                  : "rcx", "cc")
 
-uint64_t rand64(void) __attribute__((nothrow));
+uint64_t rand64(void);
 
-uint32_t rand32(void) __attribute__((nothrow));
+uint32_t rand32(void);
 
-uint16_t rand16(void) __attribute__((nothrow));
+uint16_t rand16(void);
 
-uint64_t seed64(void) __attribute__((nothrow));
+uint64_t seed64(void);
 
-uint32_t seed32(void) __attribute__((nothrow));
+uint32_t seed32(void);
 
-uint16_t seed16(void) __attribute__((nothrow));
+uint16_t seed16(void);
 
-void rand_bytes(uint8_t *r, const uint16_t N) __attribute__((nonnul));
+void rand_bytes(uint8_t *r, const uint32_t n) __attribute__((nonnul));
+
+void seed_bytes(uint8_t *r, const uint32_t n) __attribute__((nonnul));

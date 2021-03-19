@@ -1,25 +1,31 @@
 #! /usr/bin/env numba
-import camellia
+import math
+
+import gmpy2
 import numba
 import numpy as np
 from numba import cuda
 
-assert(cuda.is_available())
+import rdrand
 
-ELEM = 20_000
+assert(cuda.is_available())
+assert(gmpy2.mp_limbsize() == 64)
+
+ELEM = 100_000
 DIM = (1, 1)
+SEED = 40
 
 
 def set_dim(n):
     global DIM
-    LIM = 1000
+    LIM = 1_000
     VEC = 10
     assert(0 < n < LIM**2)
     if n < VEC**2:
         DIM = (1, n)
         return
 
-    h = int(np.sqrt(n))
+    h = math.isqrt(n)
     _x = 1
     _xx = h
     for i in reversed(range(h-VEC, h)):
@@ -31,7 +37,7 @@ def set_dim(n):
             _x = i
             _xx = _m
 
-    DIM = (_x, int(np.ceil(n / _x)))
+    DIM = (_x, math.ceil(n / _x))
     assert(np.prod(DIM) >= n)
     assert(np.sum(DIM) < LIM*2+VEC)
 
@@ -74,9 +80,7 @@ def search_kernel(h_arr, h, r_arr):
                 r_arr[idx] = pos
 
 
-c_ecb = camellia.new(key=np.random.bytes(24), mode=camellia.MODE_ECB)
-
-np_str = np.array([bytearray(c_ecb.encrypt(np.random.bytes(32))) for _ in range(ELEM)], dtype=np.uint8)
+np_str = np.array([bytearray(rdrand.seed_bytes(SEED)) for _ in range(ELEM)], dtype=np.uint8)
 
 stream = cuda.stream()
 
@@ -84,7 +88,7 @@ dEX = cuda.to_device(np_str, stream)
 dHH = cuda.device_array(np_str.shape[0], dtype=np.uint64)
 dRR = cuda.device_array(10, dtype=np.int32)
 
-r_str = np_str[np.random.randint(np_str.shape[0])]
+r_str = np_str[rdrand.rand32() % np_str.shape[0]]
 h_str = c_hash0(r_str)
 
 set_dim(np_str.shape[0])
@@ -96,9 +100,16 @@ search_kernel[DIM](dHH, h_str, dRR)
 
 np_res = dRR.copy_to_host()
 
-v1 = c_ecb.decrypt(bytes(np_str[np_res[1]])).hex()
-v2 = c_ecb.decrypt(bytes(r_str)).hex()
+v1 = gmpy2.mpz(int.from_bytes(bytes(np_str[np_res[1]]), 'big'))
+v2 = gmpy2.mpz(int.from_bytes(bytes(r_str), 'big'))
 
 assert(v1 == v2)
-print("Total GPU search results:\t {0:,d} of {1:,d}".format(np_res[0], np_str.shape[0]))
-print("{0} = {1}".format(v1, v2))
+print("Total GPU (64bit hash) search results:\t{0:,d} of {1:,d}\t(index {2:d})".format(
+    np_res[0], np_str.shape[0], np_res[1]))
+print("\t\t###\trdrand.seed_bytes({:d})\t###".format(SEED))
+print("{0}\tlength {1:d}".format(v1.digits(2), v1.bit_length()))
+print("int\t{0:d}\t(log2 ~ {1:.9f})".format(v1, gmpy2.log2(v1)))
+
+assert(np.unique(np_str, axis=0).shape[0] == np_str.shape[0])
+np_h = dHH.copy_to_host()
+assert(np.unique(np_h).shape[0] == np_h.shape[0])

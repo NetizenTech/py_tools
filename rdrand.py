@@ -1,23 +1,6 @@
 #! /usr/bin/env python
 """Python interface for RNG (Cryptographic Co-Processor). Coded by Wojciech Lawren."""
-from cffi import FFI
-
-src = """
-uint64_t rand64(void);
-
-uint32_t rand32(void);
-
-uint16_t rand16(void);
-
-uint64_t seed64(void);
-
-uint32_t seed32(void);
-
-uint16_t seed16(void);
-"""
-ffi = FFI()
-ffi.cdef(src)
-lib = ffi.dlopen("librdrand.so")
+from _rdrand import lib
 
 MAX_BITS = 2 ** 12
 DEFAULT_Z = 251

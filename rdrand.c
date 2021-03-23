@@ -47,21 +47,3 @@ uint16_t seed16()
     assert(v > 0);
     return v;
 }
-
-void rand_bytes(uint8_t *r, const uint32_t n)
-{
-    assert(r && n % 8 == 0);
-    uint64_t *rb = (uint64_t *)r;
-
-    for (uint32_t i = 0; i < (n / 8); i++)
-        rb[i] = rand64();
-}
-
-void seed_bytes(uint8_t *r, const uint32_t n)
-{
-    assert(r && n % 8 == 0);
-    uint64_t *rb = (uint64_t *)r;
-
-    for (uint32_t i = 0; i < (n / 8); i++)
-        rb[i] = seed64();
-}

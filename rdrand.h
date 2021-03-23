@@ -27,7 +27,3 @@ uint64_t seed64(void);
 uint32_t seed32(void);
 
 uint16_t seed16(void);
-
-void rand_bytes(uint8_t *r, const uint32_t n) __attribute__((nonnul));
-
-void seed_bytes(uint8_t *r, const uint32_t n) __attribute__((nonnul));

@@ -14,17 +14,16 @@ uint64_t seed64(void);
 uint32_t seed32(void);
 
 uint16_t seed16(void);
-
-void rand_bytes(uint8_t *r, const uint32_t n);
-
-void seed_bytes(uint8_t *r, const uint32_t n);
 """
 ffi = FFI()
 ffi.cdef(src)
 lib = ffi.dlopen("librdrand.so")
 
+MAX_BITS = 2 ** 12
+DEFAULT_Z = 251
 MAX_BYTES = 2 ** 22
 DEFAULT_N = 32
+BYTEORDER = "big"
 
 
 def rand64() -> int:
@@ -51,18 +50,52 @@ def seed16() -> int:
     return int(lib.seed16())
 
 
+def rand_bigint(n: int = DEFAULT_Z) -> int:
+    assert(64 < n < MAX_BITS)
+    string = str()
+    while len(string) < n:
+        string += bin(rand64())[2:]
+    return int(string[:n], 2)
+
+
+def seed_bigint(n: int = DEFAULT_Z) -> int:
+    assert(64 < n < MAX_BITS)
+    string = str()
+    while len(string) < n:
+        string += bin(seed64())[2:]
+    return int(string[:n], 2)
+
+
 def rand_bytes(n: int = DEFAULT_N) -> bytes:
-    assert(0 < n < MAX_BYTES and n % 8 == 0)
-    x = ffi.new("uint8_t[{0:d}]".format(n))
-    lib.rand_bytes(x, n)
-    return bytes(ffi.buffer(x, n))
+    assert(1 < n < MAX_BYTES)
+    string = bytes()
+    if n < 8:
+        for _ in range(sum(divmod(n, 2))):
+            string += rand16().to_bytes(2, BYTEORDER)
+        return string[:n]
+
+    (q, r) = divmod(n, 8)
+    if r > 0:
+        q += 1
+    for _ in range(q):
+        string += rand64().to_bytes(8, BYTEORDER)
+    return string[:n]
 
 
 def seed_bytes(n: int = DEFAULT_N) -> bytes:
-    assert(0 < n < MAX_BYTES and n % 8 == 0)
-    x = ffi.new("uint8_t[{0:d}]".format(n))
-    lib.seed_bytes(x, n)
-    return bytes(ffi.buffer(x, n))
+    assert(1 < n < MAX_BYTES)
+    string = bytes()
+    if n < 8:
+        for _ in range(sum(divmod(n, 2))):
+            string += seed16().to_bytes(2, BYTEORDER)
+        return string[:n]
+
+    (q, r) = divmod(n, 8)
+    if r > 0:
+        q += 1
+    for _ in range(q):
+        string += seed64().to_bytes(8, BYTEORDER)
+    return string[:n]
 
 
 # TESTS
@@ -92,6 +125,14 @@ def test_seed32(benchmark):
 
 def test_seed16(benchmark):
     benchmark.pedantic(seed16, rounds=RDS, iterations=ITR)
+
+
+def test_r_bigint(benchmark):
+    benchmark.pedantic(rand_bigint, rounds=RDS, iterations=ITR)
+
+
+def test_s_bigint(benchmark):
+    benchmark.pedantic(seed_bigint, rounds=RDS, iterations=ITR)
 
 
 def test_rand_bytes(benchmark):

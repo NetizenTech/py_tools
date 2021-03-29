@@ -2,10 +2,7 @@
 """Python interface for RNG (Cryptographic Co-Processor). Coded by Wojciech Lawren."""
 from _rdrand import lib
 
-MAX_BITS = 2 ** 16
 DEFAULT_S = 251
-
-MAX_BYTES = 2 ** 22
 DEFAULT_N = 32
 
 
@@ -34,7 +31,6 @@ def seed16() -> int:
 
 
 def rand_bits(n: int = DEFAULT_S, ef: str = "b", f: str = "064b") -> str:
-    assert(64 < n < MAX_BITS)
     string = format(rand64(), ef)
     while len(string) < n:
         string += format(rand64(), f)
@@ -42,7 +38,6 @@ def rand_bits(n: int = DEFAULT_S, ef: str = "b", f: str = "064b") -> str:
 
 
 def seed_bits(n: int = DEFAULT_S, ef: str = "b", f: str = "064b") -> str:
-    assert(64 < n < MAX_BITS)
     string = format(seed64(), ef)
     while len(string) < n:
         string += format(seed64(), f)
@@ -50,33 +45,25 @@ def seed_bits(n: int = DEFAULT_S, ef: str = "b", f: str = "064b") -> str:
 
 
 def rand_bytes(n: int = DEFAULT_N, o: str = "big") -> bytes:
-    assert(1 < n < MAX_BYTES)
     string = bytes()
     if n < 8:
-        for _ in range(sum(divmod(n, 2))):
+        while len(string) < n:
             string += rand16().to_bytes(2, o)
         return string[:n]
 
-    (q, r) = divmod(n, 8)
-    if r > 0:
-        q += 1
-    for _ in range(q):
+    while len(string) < n:
         string += rand64().to_bytes(8, o)
     return string[:n]
 
 
 def seed_bytes(n: int = DEFAULT_N, o: str = "big") -> bytes:
-    assert(1 < n < MAX_BYTES)
     string = bytes()
     if n < 8:
-        for _ in range(sum(divmod(n, 2))):
+        while len(string) < n:
             string += seed16().to_bytes(2, o)
         return string[:n]
 
-    (q, r) = divmod(n, 8)
-    if r > 0:
-        q += 1
-    for _ in range(q):
+    while len(string) < n:
         string += seed64().to_bytes(8, o)
     return string[:n]
 
